@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>文献搜索下载工具 V1.2</title>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-35CSXN7MNX"></script>
+<script>
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js',new Date());
+  gtag('config','G-35CSXN7MNX');
+</script>
 <style>
   :root { color-scheme: light; --bg:#f5f6f8; --card:#fff; --line:#e5e7eb; --text:#1f2430; --muted:#6b7280; --accent:#2563eb; --ok:#15803d; --okbg:#dcfce7; --no:#b91c1c; --nobg:#fee2e2; --warn:#b45309; --warnbg:#fef3c7; }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -144,6 +151,7 @@
 const $ = s => document.querySelector(s);
 // 反馈通过普通表单 POST 转发到邮箱；首次提交后请在邮箱中完成一次验证。
 const FEEDBACK_EMAIL = "3937791014@qq.com";
+const track=(name,params)=>{if(typeof gtag==="function")gtag("event",name,params||{});};
 const state = { srcs:["crossref","openalex","eupmc"], running:false, allResults:[], results:[], srcStatus:{} };
 
 const SRC = {
@@ -196,6 +204,7 @@ function keyOf(p){return norm(p)||("t:"+(p.title||"").toLowerCase().replace(/[^\
 async function run(){
   if(state.running)return; state.running=true; state.allResults=[]; state.results=[]; state.srcStatus={};
   const q=$("#q").value.trim(); if(!q){ flash("请输入关键词"); state.running=false; return; }
+  track("search");
   $("#go").classList.add("loading"); $("#go").disabled=true;
   renderStatus(); showState("搜集中，正在并行查询多个学术源…");
   const n=parseInt($("#nsel").value)||30; state.n=n; const jobs=[];
@@ -294,6 +303,7 @@ function flash(m){ const st=document.createElement("div"); st.style.cssText="pos
     if(message.length<5){flash("请先填写反馈内容");return;}
     const body="反馈类型："+type+"\n联系方式："+(contact||"未提供")+"\n\n"+message;
     if(location.protocol==="file:"){
+      track("feedback_submit",{feedback_type:type,delivery:"mailto"});
       location.href="mailto:"+FEEDBACK_EMAIL+"?subject="+encodeURIComponent("文献搜索工具反馈")+"&body="+encodeURIComponent(body);
       flash("本地文件将通过邮件客户端发送反馈"); mask.classList.remove("open"); return;
     }
@@ -302,6 +312,7 @@ function flash(m){ const st=document.createElement("div"); st.style.cssText="pos
     const fields={_subject:"文献搜索工具反馈",_template:"table",feedback_type:type,contact:contact||"未提供",message};
     Object.entries(fields).forEach(([name,value])=>{const input=document.createElement("input"); input.type="hidden"; input.name=name; input.value=value; form.appendChild(input);});
     document.body.appendChild(form); form.submit(); form.remove();
+    track("feedback_submit",{feedback_type:type,delivery:"formsubmit"});
     flash("已打开提交页面，请完成提交并留意邮箱验证邮件"); $("#feedbackText").value=""; mask.classList.remove("open"); btn.disabled=false; btn.textContent="提交反馈";
   });
   $("#go").addEventListener("click",run);
