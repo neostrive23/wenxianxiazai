@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文献搜索下载工具 V1.2</title>
+<style>
+  :root { color-scheme: light; --bg:#f5f6f8; --card:#fff; --line:#e5e7eb; --text:#1f2430; --muted:#6b7280; --accent:#2563eb; --ok:#15803d; --okbg:#dcfce7; --no:#b91c1c; --nobg:#fee2e2; --warn:#b45309; --warnbg:#fef3c7; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px; position:sticky; top:0; z-index:10; }
+  .hd-in { max-width:1080px; margin:0 auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:18px; white-space:nowrap; }
+  .tag { font-size:11px; background:var(--okbg); color:var(--ok); padding:2px 8px; border-radius:20px; font-weight:600; white-space:nowrap; }
+  .searchbar { flex:1; display:flex; gap:8px; min-width:280px; }
+  #q { flex:1; padding:9px 14px; border:1px solid var(--line); border-radius:9px; font-size:15px; outline:none; min-width:0; }
+  #q:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+  button { cursor:pointer; border:none; border-radius:9px; font-size:14px; font-weight:600; transition:filter .15s; }
+  button:hover { filter:brightness(.96); }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  #go { background:var(--accent); color:#fff; padding:9px 22px; }
+  #go.loading::after { content:""; display:inline-block; width:13px; height:13px; margin-left:8px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .opts { max-width:1080px; margin:10px auto 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+  .filter-row { width:100%; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .filter-row + .filter-row { margin-top:3px; }
+  .row-label { font-size:12px; font-weight:700; color:#4b5563; min-width:68px; }
+  .sort-select { padding:4px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; background:#fff; }
+  .feedback-btn { margin-top:10px; background:#eef2ff; color:#3730a3; padding:6px 12px; font-size:13px; font-weight:600; }
+  .feedback-mask { position:fixed; inset:0; background:rgba(15,23,42,.42); display:none; place-items:center; z-index:20; padding:16px; }
+  .feedback-mask.open { display:grid; }
+  .feedback-box { width:min(520px,100%); background:#fff; border-radius:12px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+  .feedback-box h2 { font-size:17px; margin-bottom:10px; }
+  .feedback-box select,.feedback-box input,.feedback-box textarea { width:100%; margin-top:5px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font:inherit; }
+  .feedback-box textarea { min-height:130px; resize:vertical; }
+  .feedback-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { display:flex; align-items:center; gap:5px; background:#f1f5f9; border:1px solid var(--line); padding:3px 10px; border-radius:20px; font-size:12.5px; cursor:pointer; user-select:none; }
+  .chip input { accent-color:var(--accent); cursor:pointer; }
+  .chip.on { background:var(--okbg); border-color:#86efac; color:#14532d; }
+  .yr { width:76px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; }
+  .numf { width:64px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; }
+  .vkw { width:130px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; }
+  .status { max-width:1080px; margin:10px auto 0; font-size:12.5px; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; padding:0 4px; }
+  .st-src { padding:1px 8px; border-radius:14px; background:#eef0f3; }
+  .st-src.ok { background:var(--okbg); color:var(--ok); }
+  .st-src.err { background:var(--nobg); color:var(--no); }
+  .st-src.run { background:var(--warnbg); color:var(--warn); }
+  main { max-width:1080px; margin:0 auto; padding:14px 4px 60px; }
+  .state { text-align:center; color:var(--muted); padding:60px 20px; font-size:15px; }
+  .state .big { font-size:34px; margin-bottom:10px; }
+  .paper { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .p-top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .p-title { font-size:15.5px; font-weight:600; color:#111827; }
+  .p-title a { color:inherit; text-decoration:none; }
+  .p-title a:hover { color:var(--accent); text-decoration:underline; }
+  .p-meta { font-size:12.8px; color:var(--muted); margin-top:4px; }
+  .p-meta b { color:#4b5563; font-weight:600; }
+  .oa { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:12px; white-space:nowrap; margin-left:6px; vertical-align:1px; }
+  .oa.y { background:var(--okbg); color:var(--ok); }
+  .oa.n { background:var(--nobg); color:var(--no); }
+  .p-ab { font-size:13.5px; color:#374151; margin-top:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }
+  .p-ab.open { display:block; }
+  .p-acts { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn { padding:6px 14px; font-size:13px; border-radius:8px; }
+  .btn-pdf { background:var(--ok); color:#fff; }
+  .btn-sci { background:#7c3aed; color:#fff; }
+  .p-venue { font-weight:600; color:#111827; background:#eef2ff; padding:1px 8px; border-radius:6px; }
+  .ifx { color:#7c3aed; background:#f3e8ff; padding:1px 7px; border-radius:12px; font-size:11px; font-weight:700; }
+  .p-line { display:flex; flex-wrap:wrap; align-items:center; gap:3px 14px; }
+  .lab { color:var(--muted); font-size:12px; margin-right:3px; }
+  .doi { color:#6b7280; font-size:12.5px; word-break:break-all; }
+  .btn-src { background:#eef0f3; color:#374151; }
+  .btn-doi { background:#eef0f3; color:#374151; text-decoration:none; display:inline-block; padding:6px 14px; font-size:13px; border-radius:8px; font-weight:600; }
+  .badge-none { font-size:12px; color:var(--no); }
+  .src-tag { font-size:11px; background:#eef0f3; padding:1px 7px; border-radius:10px; color:#6b7280; margin-right:4px; }
+  .count { font-size:13px; color:var(--muted); margin-bottom:10px; }
+  footer { max-width:1080px; margin:0 auto; padding:0 4px 24px; font-size:12px; color:var(--muted); }
+  details { background:#fff; border:1px dashed var(--line); border-radius:10px; padding:10px 14px; font-size:13px; color:var(--muted); }
+  summary { cursor:pointer; font-weight:600; color:#4b5563; }
+  @media (max-width:640px){ header { padding:10px 12px; } h1 { font-size:16px; } .btn { flex:1; text-align:center; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="hd-in">
+    <h1>📚 文献搜索下载</h1><span class="tag">开放文献检索 · 免费使用</span>
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="输入关键词 / 标题 / DOI，如 single-cell RNA-seq 或 10x Visium 空间转录组" autofocus>
+      <button id="go">搜索</button>
+    </div>
+  </div>
+  <div class="opts">
+    <div class="filter-row"><span class="row-label">检索范围</span>
+      <label>年份 ≥ <input class="yr" id="yr" type="number" placeholder="不限" min="1990" max="2100"></label>
+      <label>IF≥ <input class="numf" id="ifMin" type="number" placeholder="不限" min="0" step="0.5" title="近似影响因子下限，取不到期刊数据的文献会被排除"></label>
+      <label>被引≥ <input class="numf" id="citeMin" type="number" placeholder="不限" min="0"></label>
+      <label>期刊 <input class="vkw" id="venueKw" placeholder="含关键词，如 Nature"></label>
+    </div>
+    <div class="filter-row"><span class="row-label">结果筛选</span>
+      <label style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="oaOnly"> 只看开放获取</label>
+      <label style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="showAbstract"> 显示摘要</label>
+      <label>每源 <select id="nsel" style="padding:4px 6px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff"><option value="15">15</option><option value="30" selected>30</option><option value="50">50</option></select> 条</label>
+      <label>排序 <select id="sort" class="sort-select"><option value="relevance" selected>相关度（来源排序）</option><option value="date_desc">最新发表</option><option value="cites_desc">被引数最高</option><option value="if_desc">近似 IF 最高</option></select></label>
+      <label style="display:flex;align-items:center;gap:5px">付费墙兜底
+        <select id="mirror" style="padding:4px 6px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff"><option value="https://sci-hub.ee">sci-hub.ee</option><option value="https://sci-hub.ren">sci-hub.ren</option><option value="https://sci-hub.al">sci-hub.al</option><option value="https://sci-hub.mk">sci-hub.mk</option><option value="https://sci-hub.se">sci-hub.se</option></select>
+        <input id="mirrorCustom" placeholder="或自定义镜像 https://…" style="width:180px;padding:4px 8px;border:1px solid var(--line);border-radius:7px;font-size:13px">
+      </label>
+      <button id="clear" style="background:#eef0f3;color:#374151;padding:4px 12px;font-weight:500">清空</button>
+    </div>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+</header>
+
+<main id="main">
+  <div class="state"><div class="big">🔍</div>输入关键词开始检索。<br>支持多个开放学术数据库并行检索<br><span style="font-size:12.5px">开放获取（OA）论文可直接下载 PDF，其余给原文链接</span></div>
+</main>
+<footer>
+  <details>
+    <summary>使用说明</summary>
+    <ul style="margin:8px 0 0 18px">
+      <li>页面会并行查询多个开放学术数据库，并自动合并重复论文</li>
+      <li>期刊名旁的「IF≈」为 OpenAlex 两年篇均被引（近似影响因子，非 JCR 官方值）；「被引」按 OpenAlex 口径。最新 JCR 影响因子需要 Clarivate 授权数据</li>
+      <li>「下载 PDF」只在源返回开放获取直链时出现</li>
+      <li>付费墙论文提供「Sci-Hub 尝试」按钮（按 DOI 在所选镜像打开）。镜像可能间歇不可用，可切换；请遵守所在地版权法规，仅下载你有权获取的文献</li>
+      <li>检索为浏览器直连公共 API；反馈提交会通过 FormSubmit 转发到维护者邮箱，受各服务公共限流约束</li>
+    </ul>
+  </details>
+  <button id="feedbackBtn" class="feedback-btn">问题 / 建议反馈</button>
+</footer>
+
+<div id="feedbackMask" class="feedback-mask" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+  <div class="feedback-box">
+    <h2 id="feedbackTitle">问题 / 建议反馈</h2>
+    <label>反馈类型<select id="feedbackType"><option>功能建议</option><option>使用问题</option><option>错误报告</option></select></label>
+    <label style="display:block;margin-top:9px">联系方式（可选）<input id="feedbackContact" placeholder="邮箱或其他联系方式"></label>
+    <label style="display:block;margin-top:9px">内容<textarea id="feedbackText" placeholder="请描述问题、复现步骤或你的优化建议"></textarea></label>
+    <div class="feedback-actions"><button id="feedbackClose" class="btn-src btn">取消</button><button id="feedbackSubmit" class="btn btn-pdf">提交反馈</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+// 反馈通过普通表单 POST 转发到邮箱；首次提交后请在邮箱中完成一次验证。
+const FEEDBACK_EMAIL = "3937791014@qq.com";
+const state = { srcs:["crossref","openalex","eupmc"], running:false, allResults:[], results:[], srcStatus:{} };
+
+const SRC = {
+  crossref:{ label:"Crossref", on:false, run:async(q,n,yr)=>{ let u="https://api.crossref.org/works?query="+encodeURIComponent(q)+"&rows="+n+"&select=DOI,title,author,issued,container-title,abstract,link,URL,is-referenced-by-count,type&filter=type:journal-article"; if(yr)u+=",from-pub-date:"+yr+"-01-01";
+    const d=await fetchJ(u); return (d.message&&d.message.items||[]).filter(i=>i.title&&i.title[0]).map(i=>({id:"cr:"+i.DOI,doi:i.DOI,title:strip(i.title[0]),authors:(i.author||[]).slice(0,12).map(a=>[a.given,a.family].filter(Boolean).join(" ")).join("; "),year:(i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0]&&i.issued["date-parts"][0][0])||"",date:((i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0])||[]).filter(Boolean).join("-"),venue:(i["container-title"]&&i["container-title"][0])||"",abstract:jats2text(i.abstract||""),url:i.URL||(i.DOI?"https://doi.org/"+i.DOI:""),pdf:(i.link||[]).find(l=>/pdf|unspecified/i.test(l.content_type||""))?.[URL]||"",cites:i["is-referenced-by-count"]||0})); } },
+  openalex:{ label:"OpenAlex", on:true, run:async(q,n,yr)=>{ let u="https://api.openalex.org/works?search="+encodeURIComponent(q)+"&per-page="+n+"&select=id,doi,title,display_name,publication_date,authorships,primary_location,open_access,best_oa_location,type,cited_by_count"; if(yr)u+="&filter=from_publication_date:"+yr+"-01-01";
+    const d=await fetchJ(u); return (d.results||[]).filter(r=>r.title).map(r=>{const a=(r.authorships||[]).map(x=>x.author?.display_name).filter(Boolean).join("; ");const pdf=r.best_oa_location?.pdf_url||(r.primary_location?.pdf_url)||"";return{id:"oa:"+r.id,doi:r.doi?r.doi.replace("https://doi.org/",""):"",title:r.title,authors:a,year:r.publication_year||"",date:(r.publication_date||"").slice(0,10),venue:r.primary_location?.source?.display_name||"",abstract:"",url:r.doi||r.id,pdf:pdf||"",cites:r.cited_by_count||0};});} },
+  eupmc:{ label:"Europe PMC", on:true, run:async(q,n,yr)=>{ const terms=q.split(/\s+/).filter(Boolean).slice(0,4).map(w=>w.replace(/["()]/g,"")); let qs=terms.map(w=>"TITLE_ABS:\""+w+"\"").join(" AND "); if(yr)qs+=" AND PUB_YEAR:["+yr+" TO 3000]"; const u="https://www.ebi.ac.uk/europepmc/webservices/rest/search?query="+encodeURIComponent(qs)+"&format=json&pageSize="+n+"&resultType=core";
+    const d=await fetchJ(u); return ((d.resultList&&d.resultList.result)||[]).filter(r=>r.title).map(r=>{let pdf="";(r.fullTextUrlList&&r.fullTextUrlList.fullTextUrl||[]).forEach(f=>{if(f.documentStyle==="pdf"||/pdf/i.test(f.availability||"")){pdf=f.url||pdf;}});if(!pdf&&r.pmcid)pdf="https://www.ncbi.nlm.nih.gov/pmc/articles/"+r.pmcid+"/pdf/";return{id:"pmc:"+(r.pmcid||r.id),doi:r.doi||"",title:r.title,authors:r.authorString||"",year:r.pubYear||"",date:(r.firstPublicationDate||"").slice(0,10),venue:r.journalInfo?.journal?.title||r.journalTitle||"",abstract:r.abstractText||"",url:"https://europepmc.org/article/"+r.source+"/"+r.id,pdf:pdf,cites:0};});} },
+};
+const URL="url", strip=s=>s.replace(/<[^>]*>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim(),
+  jats2text=x=>x?x.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim():"";
+
+async function fetchJ(u){ const c=new AbortController(); const t=setTimeout(()=>c.abort(),15000);
+  try{ const r=await fetch(u,{signal:c.signal,headers:{Accept:"application/json"}}); if(!r.ok)throw new Error("HTTP "+r.status); return await r.json(); }
+  finally{ clearTimeout(t); } }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// 补全:OpenAlex 权威被引 + 完整发表日期(works 端点), 近似IF(sources 端点, 按期刊 id 去重缓存)
+async function enrich(rs){
+  const withDoi=rs.filter(p=>p.doi); if(!withDoi.length)return;
+  const sidMap=new Map(); const B=8;
+  for(let i=0;i<withDoi.length;i+=B){
+    const batch=withDoi.slice(i,i+B);
+    await Promise.allSettled(batch.map(async p=>{ try{
+      const d=await fetchJ("https://api.openalex.org/works/https://doi.org/"+p.doi+"?select=cited_by_count,publication_date,primary_location");
+      if(typeof d.cited_by_count==="number")p.cites=d.cited_by_count;
+      if(d.publication_date){ p.date=d.publication_date.slice(0,10); if(!p.year)p.year=parseInt(d.publication_date.slice(0,4)); }
+      const sid=d.primary_location&&d.primary_location.source&&d.primary_location.source.id;
+      if(sid)sidMap.set(p,sid);
+    }catch(e){} }));
+    if(i+B<withDoi.length)await sleep(400);
+  }
+  const uni=[...new Set(sidMap.values())];
+  for(let i=0;i<uni.length;i+=10){
+    const sb=uni.slice(i,i+10); const stats=new Map();
+    await Promise.allSettled(sb.map(async sid=>{ try{
+      const d=await fetchJ("https://api.openalex.org/sources/"+sid.split("/").pop()+"?select=display_name,summary_stats");
+      const m=d.summary_stats&&d.summary_stats["2yr_mean_citedness"];
+      if(typeof m==="number")stats.set(sid,m);
+    }catch(e){} }));
+    sidMap.forEach((sid,p)=>{ const m=stats.get(sid); if(typeof m==="number")p.ifx=m; });
+    if(i+10<uni.length)await sleep(350);
+  }
+}
+
+function norm(x){return (x.doi||"").toLowerCase().trim();}
+function keyOf(p){return norm(p)||("t:"+(p.title||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu,"").slice(0,120));}
+
+async function run(){
+  if(state.running)return; state.running=true; state.allResults=[]; state.results=[]; state.srcStatus={};
+  const q=$("#q").value.trim(); if(!q){ flash("请输入关键词"); state.running=false; return; }
+  $("#go").classList.add("loading"); $("#go").disabled=true;
+  renderStatus(); showState("搜集中，正在并行查询多个学术源…");
+  const n=parseInt($("#nsel").value)||30; state.n=n; const jobs=[];
+  const yr=parseInt($("#yr").value)||0; state.query=q; state.yr=yr;
+  if(/[\u4e00-\u9fa5]/.test(q)) flash("提示：英文库对中文支持差，建议改用英文关键词（如 rice single-cell RNA-seq）");
+  for(const [k,v] of Object.entries(SRC)) if(state.srcs.includes(k)){ state.srcStatus[k]="run";
+    jobs.push(v.run(q,n,yr).then(rs=>{state.srcStatus[k]="ok";return rs;}).catch(e=>{state.srcStatus[k]="err"; console.warn(k,e); return[];})); }
+  const all=(await Promise.all(jobs)).flat();
+  // 合并去重：优先保留带 pdf 且信息全的记录
+  const map=new Map();
+  for(const [rank,p] of all.entries()){ p._rank=rank; const k=keyOf(p); const prev=map.get(k);
+    if(!prev||(p.pdf&&!prev.pdf)||(p.year&&!prev.year)||(p.cites>prev.cites)) map.set(k,prev?{...prev,...p,pdf:p.pdf||prev.pdf,_rank:Math.min(prev._rank??rank,p._rank)}:p); }
+  state.allResults=[...map.values()];
+  if(state.yr){ state.allResults=state.allResults.filter(p=>parseInt(p.year)>=state.yr); }
+  state.allResults.sort((a,b)=>(a._rank??0)-(b._rank??0));
+  if(state.allResults.length){ renderStatus(); $("#main").innerHTML='<div class="count">共 '+state.allResults.length+' 篇 · 正在补全期刊影响因子与引用数据…</div>'; await enrich(state.allResults); }
+  applyFilters();
+  render(); state.running=false; $("#go").classList.remove("loading"); $("#go").disabled=false;
+}
+function showState(html){ $("#main").innerHTML='<div class="state">'+html+"</div>"; }
+function renderStatus(){ const el=$("#status"); const values=Object.values(state.srcStatus);
+  if(state.running){ el.textContent="正在检索多个学术数据库…"; return; }
+  el.textContent=values.includes("err")?"检索完成，部分数据源暂时不可用":"检索完成"; }
+function applyFilters(){
+  const ifMin=parseFloat($("#ifMin").value), citeMin=parseInt($("#citeMin").value)||0, vk=$("#venueKw").value.trim().toLowerCase();
+  let r=state.allResults.slice();
+  if($("#oaOnly").checked) r=r.filter(p=>p.pdf);
+  if(ifMin>0){ if(state.allResults.some(p=>typeof p.ifx!=="number"))flash("提示：IF≈取不到的文献（无期刊数据/预印本）会被 IF 筛选排除"); r=r.filter(p=>typeof p.ifx==="number"&&p.ifx>=ifMin); }
+  if(citeMin>0) r=r.filter(p=>(p.cites||0)>=citeMin);
+  if(vk) r=r.filter(p=>(p.venue||"").toLowerCase().includes(vk));
+  const sort=$("#sort").value;
+  if(sort==="cites_desc") r.sort((a,b)=>(b.cites||0)-(a.cites||0)||(b.year||0)-(a.year||0));
+  else if(sort==="if_desc") r.sort((a,b)=>(typeof b.ifx==="number"?b.ifx:-1)-(typeof a.ifx==="number"?a.ifx:-1)||(b.cites||0)-(a.cites||0));
+  else if(sort==="relevance") r.sort((a,b)=>(a._rank??0)-(b._rank??0));
+  else r.sort((a,b)=>(String(b.date||b.year||"")).localeCompare(String(a.date||a.year||""))||(b.cites||0)-(a.cites||0));
+  state.results=r;
+}
+function mirrorHost(){
+  const c=$("#mirrorCustom").value.trim();
+  if(c){ try{ const u=new URL(c); if(/^https?:$/.test(u.protocol))return c.replace(/\/+$/,''); }catch(e){} flash("自定义镜像地址无效，已使用下拉框中的镜像"); }
+  return $("#mirror").value.replace(/\/+$/,'');
+}
+function safeUrl(raw,fallback="#"){
+  try{ const u=new URL(String(raw||"")); return /^https?:$/.test(u.protocol)?u.href:fallback; }catch(e){ return fallback; }
+}
+function render(){
+  const rs=state.results; renderStatus();
+  if(!rs.length){ let tip='试试：换更短或更精准的关键词、勾选更多来源、去掉年份限制';
+    if(/[\u4e00-\u9fa5]/.test(state.query)) tip='中文关键词在英文学术库覆盖有限（OpenAlex 对中文会乱匹配，Europe PMC 不支持）。建议改用英文关键词，例如 rice single-cell RNA-seq、spatial transcriptomics；中文文献库（知网等）不在免费源内。';
+    else if(state.yr) tip='年份过滤已在源头生效，仍无结果说明该年份段匹配少，建议放宽年份或留空再试。';
+    showState('<div class="big">📭</div>没有结果<br><span style="font-size:13px">'+tip+'</span>'); return; }
+  $("#main").innerHTML='<div class="count">共 '+rs.length+' 篇 · 每源按相关度取前 '+(state.n||30)+' 条'+(state.query?'（若词条宽泛，匹配总量可上万，此处只展示最相关的 '+ (state.n||30)+' 条；调大“每源条数”或换精准词可查看更多）':'')+'</div>';
+  const frag=document.createDocumentFragment();
+  for(const p of rs){
+    const d=document.createElement("div"); d.className="paper";
+    const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    const title=p.title?esc(p.title):"(无标题)";
+    const href=esc(safeUrl(p.url||(p.doi?"https://doi.org/"+p.doi:"")));
+    const pdf=p.pdf?safeUrl(p.pdf):"";
+    const host=esc(mirrorHost());
+    const ifx=p.ifx?('IF≈'+p.ifx.toFixed(1)):'';
+    d.innerHTML=
+      '<div class="p-top"><div style="min-width:0">'+
+      '<div class="p-title"><a href="'+href+'" target="_blank" rel="noopener">'+title+'</a>'+
+      (pdf?'<span class="oa y">OA</span>':'<span class="oa n">订阅</span>')+'</div>'+
+      (p.authors?'<div class="p-meta p-auth">'+esc(p.authors)+'</div>':'')+
+      '<div class="p-meta p-line">'+
+      '<span class="p-venue">'+esc(p.venue||"未知期刊")+'</span>'+
+      (ifx?'<span class="ifx" title="OpenAlex 两年篇均被引，近似影响因子">'+ifx+'</span>':'')+
+      '<span class="cites">被引 '+(typeof p.cites==="number"?p.cites:0)+'</span>'+
+      ( (p.date||p.year)?'<span><span class="lab">发表时间</span> '+esc(p.date||String(p.year))+'</span>':'' )+
+      (p.doi?'<span class="doi"><span class="lab">DOI</span> '+esc(p.doi)+'</span>':'')+
+      '</div>'+
+      (p.abstract&&$("#showAbstract").checked?'<div class="p-ab open" title="点击收起摘要">'+esc(p.abstract)+'</div>':'')+
+      '</div></div>'+
+      '<div class="p-acts">'+
+      (pdf?'<a class="btn btn-pdf" href="'+esc(pdf)+'" target="_blank" rel="noopener noreferrer">⬇ 下载 PDF</a>':(p.doi?'<a class="btn btn-sci" href="'+host+'/'+encodeURIComponent(p.doi)+'" target="_blank" rel="noopener noreferrer">Sci-Hub 尝试</a>':'<span class="badge-none">无 DOI，无法定位全文</span>'))+
+      (href&&href!=="#"?'<a class="btn-src btn" href="'+href+'" target="_blank" rel="noopener">原文页</a>':'')+
+      (p.title?'<a class="btn-src btn" href="https://scholar.google.com/scholar?q='+encodeURIComponent(p.title)+'" target="_blank" rel="noopener noreferrer">Scholar 免费版</a>':'')+
+      (p.doi?'<a class="btn-doi" href="https://doi.org/'+esc(p.doi)+'" target="_blank" rel="noopener">DOI 解析</a>':'')+
+      '</div>';
+    const ab=d.querySelector(".p-ab"); if(ab) ab.addEventListener("click",()=>ab.classList.toggle("open"));
+    frag.appendChild(d);
+  }
+  $("#main").appendChild(frag);
+}
+function flash(m){ const st=document.createElement("div"); st.style.cssText="position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 18px;border-radius:9px;font-size:14px;z-index:99;box-shadow:0 4px 14px rgba(0,0,0,.25)"; st.textContent=m; document.body.appendChild(st); setTimeout(()=>st.remove(),2200); }
+
+(function init(){
+  const mask=$("#feedbackMask");
+  $("#feedbackBtn").addEventListener("click",()=>{ mask.classList.add("open"); $("#feedbackText").focus(); });
+  $("#feedbackClose").addEventListener("click",()=>mask.classList.remove("open"));
+  mask.addEventListener("click",e=>{if(e.target===mask)mask.classList.remove("open");});
+  $("#feedbackSubmit").addEventListener("click",()=>{
+    const type=$("#feedbackType").value, contact=$("#feedbackContact").value.trim(), message=$("#feedbackText").value.trim(), btn=$("#feedbackSubmit");
+    if(message.length<5){flash("请先填写反馈内容");return;}
+    const body="反馈类型："+type+"\n联系方式："+(contact||"未提供")+"\n\n"+message;
+    if(location.protocol==="file:"){
+      location.href="mailto:"+FEEDBACK_EMAIL+"?subject="+encodeURIComponent("文献搜索工具反馈")+"&body="+encodeURIComponent(body);
+      flash("本地文件将通过邮件客户端发送反馈"); mask.classList.remove("open"); return;
+    }
+    btn.disabled=true; btn.textContent="正在打开提交页面…";
+    const form=document.createElement("form"); form.method="POST"; form.action="https://formsubmit.co/"+FEEDBACK_EMAIL; form.target="_blank"; form.style.display="none";
+    const fields={_subject:"文献搜索工具反馈",_template:"table",feedback_type:type,contact:contact||"未提供",message};
+    Object.entries(fields).forEach(([name,value])=>{const input=document.createElement("input"); input.type="hidden"; input.name=name; input.value=value; form.appendChild(input);});
+    document.body.appendChild(form); form.submit(); form.remove();
+    flash("已打开提交页面，请完成提交并留意邮箱验证邮件"); $("#feedbackText").value=""; mask.classList.remove("open"); btn.disabled=false; btn.textContent="提交反馈";
+  });
+  $("#go").addEventListener("click",run);
+  $("#clear").addEventListener("click",()=>{$("#q").value="";$("#yr").value="";$("#oaOnly").checked=false;$("#showAbstract").checked=false;$("#ifMin").value="";$("#citeMin").value="";$("#venueKw").value="";$("#sort").value="relevance";$("#mirrorCustom").value="";state.allResults=[];state.results=[];state.query="";showState('<div class="big">🔍</div>输入关键词开始检索。<br>支持多源并行：Crossref / OpenAlex / Europe PMC');$("#status").innerHTML="";});
+  ["yr","oaOnly","showAbstract","ifMin","citeMin","venueKw","sort","mirror","mirrorCustom"].forEach(id=>$("#"+id).addEventListener(id==="mirrorCustom"?"input":"change",()=>{if(state.allResults.length){applyFilters();render();}}));
+  $("#q").addEventListener("keydown",e=>{ if(e.key==="Enter")run(); });
+  renderStatus();
+})();
+</script>
+</body>
+</html>
