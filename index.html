@@ -251,6 +251,18 @@ function mirrorHost(){
 function safeUrl(raw,fallback="#"){
   try{ const u=new URL(String(raw||"")); return /^https?:$/.test(u.protocol)?u.href:fallback; }catch(e){ return fallback; }
 }
+async function resolveOaPdf(p){
+  const candidates=[];
+  if(p.doi){
+    try{
+      const d=await fetchJ("https://api.unpaywall.org/v2/"+encodeURIComponent(p.doi)+"?email="+encodeURIComponent(FEEDBACK_EMAIL));
+      const locs=[d.best_oa_location,...(d.oa_locations||[])].filter(Boolean);
+      locs.forEach(l=>{if(l.url_for_pdf)candidates.push(l.url_for_pdf);});
+    }catch(e){}
+  }
+  if(p.pdf)candidates.push(p.pdf);
+  return candidates.map(u=>safeUrl(u,"")).find(Boolean)||"";
+}
 function render(){
   const rs=state.results; renderStatus();
   if(!rs.length){ let tip='试试：换更短或更精准的关键词、勾选更多来源、去掉年份限制';
@@ -282,12 +294,13 @@ function render(){
       (p.abstract&&$("#showAbstract").checked?'<div class="p-ab open" title="点击收起摘要">'+esc(p.abstract)+'</div>':'')+
       '</div></div>'+
       '<div class="p-acts">'+
-      (pdf?'<a class="btn btn-pdf" href="'+esc(pdf)+'" target="_blank" rel="noopener noreferrer">⬇ 下载 PDF</a>':(p.doi?'<a class="btn btn-sci" href="'+host+'/'+encodeURIComponent(p.doi)+'" target="_blank" rel="noopener noreferrer">Sci-Hub 尝试</a>':'<span class="badge-none">无 DOI，无法定位全文</span>'))+
+      (pdf?'<a class="btn btn-pdf p-pdf" href="#" target="_blank" rel="noopener noreferrer">⬇ 获取 PDF</a>':(p.doi?'<a class="btn btn-sci" href="'+host+'/'+encodeURIComponent(p.doi)+'" target="_blank" rel="noopener noreferrer">Sci-Hub 尝试</a>':'<span class="badge-none">无 DOI，无法定位全文</span>'))+
       (href&&href!=="#"?'<a class="btn-src btn" href="'+href+'" target="_blank" rel="noopener">原文页</a>':'')+
       (p.title?'<a class="btn-src btn" href="https://scholar.google.com/scholar?q='+encodeURIComponent(p.title)+'" target="_blank" rel="noopener noreferrer">Scholar 免费版</a>':'')+
       (p.doi?'<a class="btn-doi" href="https://doi.org/'+esc(p.doi)+'" target="_blank" rel="noopener">DOI 解析</a>':'')+
       '</div>';
     const ab=d.querySelector(".p-ab"); if(ab) ab.addEventListener("click",()=>ab.classList.toggle("open"));
+    const pdfBtn=d.querySelector(".p-pdf"); if(pdfBtn) pdfBtn.addEventListener("click",async e=>{e.preventDefault(); const tab=window.open("about:blank","_blank"); if(!tab){flash("浏览器阻止了新标签页，请允许弹窗");return;} pdfBtn.textContent="正在查找 PDF…"; const pdfUrl=await resolveOaPdf(p); tab.location.href=pdfUrl||safeUrl(p.url,"#"); pdfBtn.textContent=pdfUrl?"⬇ 获取 PDF":"打开原文页"; if(!pdfUrl)flash("未找到可用 PDF，已打开原文页");});
     frag.appendChild(d);
   }
   $("#main").appendChild(frag);
