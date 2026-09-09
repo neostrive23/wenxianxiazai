@@ -155,10 +155,10 @@ const track=(name,params)=>{if(typeof gtag==="function")gtag("event",name,params
 const state = { srcs:["crossref","openalex","eupmc"], running:false, allResults:[], results:[], srcStatus:{} };
 
 const SRC = {
-  crossref:{ label:"Crossref", on:false, run:async(q,n,yr)=>{ let u="https://api.crossref.org/works?query="+encodeURIComponent(q)+"&rows="+n+"&select=DOI,title,author,issued,container-title,abstract,link,URL,is-referenced-by-count,type&filter=type:journal-article"; if(yr)u+=",from-pub-date:"+yr+"-01-01";
-    const d=await fetchJ(u); return (d.message&&d.message.items||[]).filter(i=>i.title&&i.title[0]).map(i=>({id:"cr:"+i.DOI,doi:i.DOI,title:strip(i.title[0]),authors:(i.author||[]).slice(0,12).map(a=>[a.given,a.family].filter(Boolean).join(" ")).join("; "),year:(i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0]&&i.issued["date-parts"][0][0])||"",date:((i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0])||[]).filter(Boolean).join("-"),venue:(i["container-title"]&&i["container-title"][0])||"",abstract:jats2text(i.abstract||""),url:i.URL||(i.DOI?"https://doi.org/"+i.DOI:""),pdf:(i.link||[]).find(l=>{const u=l[URL]||l.url||"";return /application\/pdf/i.test(l.content_type||"")||/\.pdf(?:[?#]|$)/i.test(u);})?.[URL]||"",cites:i["is-referenced-by-count"]||0})); } },
+  crossref:{ label:"Crossref", on:false, run:async(q,n,yr)=>{ let u="https://api.crossref.org/works?query="+encodeURIComponent(q)+"&rows="+n+"&select=DOI,title,author,issued,container-title,abstract,link,URL,resource,is-referenced-by-count,type&filter=type:journal-article"; if(yr)u+=",from-pub-date:"+yr+"-01-01";
+    const d=await fetchJ(u); return (d.message&&d.message.items||[]).filter(i=>i.title&&i.title[0]).map(i=>({id:"cr:"+i.DOI,doi:i.DOI,title:strip(i.title[0]),authors:(i.author||[]).slice(0,12).map(a=>[a.given,a.family].filter(Boolean).join(" ")).join("; "),year:(i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0]&&i.issued["date-parts"][0][0])||"",date:((i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0])||[]).filter(Boolean).join("-"),venue:(i["container-title"]&&i["container-title"][0])||"",abstract:jats2text(i.abstract||""),url:i.resource?.primary?.URL||i.URL||(i.DOI?"https://doi.org/"+i.DOI:""),pdf:(i.link||[]).find(l=>{const u=l[URL]||l.url||"";return /application\/pdf/i.test(l.content_type||"")||/\.pdf(?:[?#]|$)/i.test(u);})?.[URL]||"",cites:i["is-referenced-by-count"]||0})); } },
   openalex:{ label:"OpenAlex", on:true, run:async(q,n,yr)=>{ let u="https://api.openalex.org/works?search="+encodeURIComponent(q)+"&per-page="+n+"&select=id,doi,title,display_name,publication_date,authorships,primary_location,open_access,best_oa_location,type,cited_by_count"; if(yr)u+="&filter=from_publication_date:"+yr+"-01-01";
-    const d=await fetchJ(u); return (d.results||[]).filter(r=>r.title).map(r=>{const a=(r.authorships||[]).map(x=>x.author?.display_name).filter(Boolean).join("; ");const candidates=[r.best_oa_location?.pdf_url,r.primary_location?.pdf_url].filter(Boolean);const pdf=candidates.find(isLikelyPdf)||"";return{id:"oa:"+r.id,doi:r.doi?r.doi.replace("https://doi.org/",""):"",title:r.title,authors:a,year:r.publication_year||"",date:(r.publication_date||"").slice(0,10),venue:r.primary_location?.source?.display_name||"",abstract:"",url:r.doi||r.id,pdf:pdf,cites:r.cited_by_count||0};});} },
+    const d=await fetchJ(u); return (d.results||[]).filter(r=>r.title).map(r=>{const a=(r.authorships||[]).map(x=>x.author?.display_name).filter(Boolean).join("; ");const candidates=[r.best_oa_location?.pdf_url,r.primary_location?.pdf_url].filter(Boolean);const pdf=candidates.find(isLikelyPdf)||"";const landing=r.primary_location?.landing_page_url||r.best_oa_location?.landing_page_url||r.doi||r.id;return{id:"oa:"+r.id,doi:r.doi?r.doi.replace("https://doi.org/",""):"",title:r.title,authors:a,year:r.publication_year||"",date:(r.publication_date||"").slice(0,10),venue:r.primary_location?.source?.display_name||"",abstract:"",url:landing,pdf:pdf,cites:r.cited_by_count||0};});} },
   eupmc:{ label:"Europe PMC", on:true, run:async(q,n,yr)=>{ const terms=q.split(/\s+/).filter(Boolean).slice(0,4).map(w=>w.replace(/["()]/g,"")); let qs=terms.map(w=>"TITLE_ABS:\""+w+"\"").join(" AND "); if(yr)qs+=" AND PUB_YEAR:["+yr+" TO 3000]"; const u="https://www.ebi.ac.uk/europepmc/webservices/rest/search?query="+encodeURIComponent(qs)+"&format=json&pageSize="+n+"&resultType=core";
     const d=await fetchJ(u); return ((d.resultList&&d.resultList.result)||[]).filter(r=>r.title).map(r=>{let pdf="";(r.fullTextUrlList&&r.fullTextUrlList.fullTextUrl||[]).forEach(f=>{if(f.documentStyle==="pdf"||/pdf/i.test(f.availability||"")){pdf=f.url||pdf;}});if(!pdf&&r.pmcid)pdf="https://www.ncbi.nlm.nih.gov/pmc/articles/"+r.pmcid+"/pdf/";return{id:"pmc:"+(r.pmcid||r.id),doi:r.doi||"",title:r.title,authors:r.authorString||"",year:r.pubYear||"",date:(r.firstPublicationDate||"").slice(0,10),venue:r.journalInfo?.journal?.title||r.journalTitle||"",abstract:r.abstractText||"",url:"https://europepmc.org/article/"+r.source+"/"+r.id,pdf:pdf,cites:0};});} },
 };
@@ -201,6 +201,17 @@ async function enrich(rs){
 
 function norm(x){return (x.doi||"").toLowerCase().trim();}
 function keyOf(p){return norm(p)||("t:"+(p.title||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu,"").slice(0,120));}
+function articleUrlScore(raw){
+  const u=String(raw||"").toLowerCase();
+  if(!u)return 0;
+  if(/doi\.org\//.test(u)||/openalex\.org\//.test(u))return 1;
+  if(/europepmc\.org\/article\//.test(u))return 2;
+  return 3;
+}
+function bestArticleUrl(a,b,doi){
+  const chosen=articleUrlScore(b)>articleUrlScore(a)?b:a;
+  return chosen||(doi?"https://doi.org/"+doi:"");
+}
 
 async function run(){
   if(state.running)return; state.running=true; state.allResults=[]; state.results=[]; state.srcStatus={};
@@ -214,10 +225,18 @@ async function run(){
   for(const [k,v] of Object.entries(SRC)) if(state.srcs.includes(k)){ state.srcStatus[k]="run";
     jobs.push(v.run(q,n,yr).then(rs=>{state.srcStatus[k]="ok";return rs;}).catch(e=>{state.srcStatus[k]="err"; console.warn(k,e); return[];})); }
   const all=(await Promise.all(jobs)).flat();
-  // 合并去重：优先保留带 pdf 且信息全的记录
+  // 合并去重：各来源互补字段，同时避免数据库主页/DOI 中转页覆盖出版社原文页。
   const map=new Map();
   for(const [rank,p] of all.entries()){ p._rank=rank; const k=keyOf(p); const prev=map.get(k);
-    if(!prev||(p.pdf&&!prev.pdf)||(p.year&&!prev.year)||(p.cites>prev.cites)) map.set(k,prev?{...prev,...p,pdf:p.pdf||prev.pdf,_rank:Math.min(prev._rank??rank,p._rank)}:p); }
+    if(!prev){ map.set(k,p); continue; }
+    map.set(k,{...prev,...p,
+      doi:p.doi||prev.doi,title:p.title||prev.title,authors:p.authors||prev.authors,
+      year:p.year||prev.year,date:p.date||prev.date,venue:p.venue||prev.venue,
+      abstract:p.abstract||prev.abstract,pdf:p.pdf||prev.pdf,
+      url:bestArticleUrl(prev.url,p.url,p.doi||prev.doi),
+      cites:Math.max(prev.cites||0,p.cites||0),
+      _rank:Math.min(prev._rank??rank,p._rank??rank)
+    }); }
   state.allResults=[...map.values()];
   if(state.yr){ state.allResults=state.allResults.filter(p=>parseInt(p.year)>=state.yr); }
   state.allResults.sort((a,b)=>(a._rank??0)-(b._rank??0));
@@ -249,18 +268,19 @@ function mirrorHost(){
   return $("#mirror").value.replace(/\/+$/,'');
 }
 function safeUrl(raw,fallback="#"){
-  try{ const u=new URL(String(raw||"")); return /^https?:$/.test(u.protocol)?u.href:fallback; }catch(e){ return fallback; }
+  try{ let s=String(raw||"").trim(); s=s.replace(/^http:\/\/engine\.scichina\.com/i,"https://engine.scichina.com"); const u=new URL(s); return /^https?:$/.test(u.protocol)?u.href:fallback; }catch(e){ return fallback; }
 }
+const unreliableDirectPdf=u=>/\bengine\.scichina\.com\/doi\/pdf\//i.test(String(u||""));
 async function resolveOaPdf(p){
   const candidates=[];
   if(p.doi){
     try{
       const d=await fetchJ("https://api.unpaywall.org/v2/"+encodeURIComponent(p.doi)+"?email="+encodeURIComponent(FEEDBACK_EMAIL));
       const locs=[d.best_oa_location,...(d.oa_locations||[])].filter(Boolean);
-      locs.forEach(l=>{if(l.url_for_pdf)candidates.push(l.url_for_pdf);});
+      locs.forEach(l=>{if(l.url_for_pdf&&!unreliableDirectPdf(l.url_for_pdf))candidates.push(l.url_for_pdf);});
     }catch(e){}
   }
-  if(p.pdf)candidates.push(p.pdf);
+  if(p.pdf&&!unreliableDirectPdf(p.pdf))candidates.push(p.pdf);
   return candidates.map(u=>safeUrl(u,"")).find(Boolean)||"";
 }
 function render(){
@@ -295,7 +315,7 @@ function render(){
       '</div></div>'+
       '<div class="p-acts">'+
       (pdf?'<a class="btn btn-pdf p-pdf" href="#" target="_blank" rel="noopener noreferrer">⬇ 获取 PDF</a>':(p.doi?'<a class="btn btn-sci" href="'+host+'/'+encodeURIComponent(p.doi)+'" target="_blank" rel="noopener noreferrer">Sci-Hub 尝试</a>':'<span class="badge-none">无 DOI，无法定位全文</span>'))+
-      (href&&href!=="#"?'<a class="btn-src btn" href="'+href+'" target="_blank" rel="noopener">原文页</a>':'')+
+      (href&&href!=="#"?'<a class="btn-src btn p-original" href="'+href+'" target="_blank" rel="noopener">原文页</a>':'')+
       (p.title?'<a class="btn-src btn" href="https://scholar.google.com/scholar?q='+encodeURIComponent(p.title)+'" target="_blank" rel="noopener noreferrer">Scholar 免费版</a>':'')+
       (p.doi?'<a class="btn-doi" href="https://doi.org/'+esc(p.doi)+'" target="_blank" rel="noopener">DOI 解析</a>':'')+
       '</div>';
