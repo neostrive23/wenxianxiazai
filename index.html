@@ -159,24 +159,31 @@ const EMBEDDED_JCR_GZIP="H4sIAAAAAAAC/9S9W1MjSbYu+Fdk/ZBPpZ4I97jupy1EJKhLILYEWWQ
 const SRC = {
   crossref:{ label:"Crossref", on:false, run:async(q,n,yr)=>{ let u="https://api.crossref.org/works?query="+encodeURIComponent(q)+"&rows="+n+"&select=DOI,title,author,issued,container-title,abstract,link,license,URL,resource,ISSN,is-referenced-by-count,type&filter=type:journal-article"; if(yr)u+=",from-pub-date:"+yr+"-01-01";
     const d=await fetchJ(u); return (d.message&&d.message.items||[]).filter(i=>i.title&&i.title[0]).map(i=>{const access=crossrefAccess(i);return{id:"cr:"+i.DOI,doi:i.DOI,title:strip(i.title[0]),authors:(i.author||[]).slice(0,12).map(a=>[a.given,a.family].filter(Boolean).join(" ")).join("; "),year:(i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0]&&i.issued["date-parts"][0][0])||"",date:((i.issued&&i.issued["date-parts"]&&i.issued["date-parts"][0])||[]).filter(Boolean).join("-"),venue:(i["container-title"]&&i["container-title"][0])||"",issns:(i.ISSN||[]).filter(Boolean),abstract:jats2text(i.abstract||""),url:access.url||(i.DOI?"https://doi.org/"+i.DOI:""),pdf:access.pdf,oa:access.oa,accessChecked:true,cites:i["is-referenced-by-count"]||0};}); } },
-  openalex:{ label:"OpenAlex", on:true, run:async(q,n,yr)=>{ let u="https://api.openalex.org/works?search="+encodeURIComponent(q)+"&per-page="+n+"&select=id,doi,title,display_name,publication_year,publication_date,authorships,primary_location,open_access,best_oa_location,type,cited_by_count"; if(yr)u+="&filter=from_publication_date:"+yr+"-01-01";
-    const d=await fetchJ(u); return (d.results||[]).filter(r=>r.title).map(r=>{const a=(r.authorships||[]).map(x=>x.author?.display_name).filter(Boolean).join("; ");const candidates=[r.best_oa_location?.pdf_url,r.primary_location?.pdf_url].filter(Boolean);const pdf=candidates.find(isLikelyPdf)||"";const landing=r.primary_location?.landing_page_url||r.best_oa_location?.landing_page_url||r.doi||r.id;const source=r.primary_location?.source||{};return{id:"oa:"+r.id,doi:r.doi?r.doi.replace("https://doi.org/",""):"",title:r.title,authors:a,year:r.publication_year||"",date:(r.publication_date||"").slice(0,10),venue:source.display_name||"",issns:[source.issn_l,...(source.issn||[])].filter(Boolean),abstract:"",url:landing,pdf:pdf,oa:!!pdf||!!r.open_access?.is_oa,cites:r.cited_by_count||0};});} },
+  openalex:{ label:"OpenAlex", on:true, run:async(q,n,yr)=>{ let u="https://api.openalex.org/works?search="+encodeURIComponent(q)+"&per-page="+n+"&select=id,doi,title,display_name,publication_year,publication_date,authorships,primary_location,open_access,best_oa_location,type,cited_by_count,abstract_inverted_index"; if(yr)u+="&filter=from_publication_date:"+yr+"-01-01";
+    const d=await fetchJ(u); return (d.results||[]).filter(r=>r.title).map(r=>{const a=(r.authorships||[]).map(x=>x.author?.display_name).filter(Boolean).join("; ");const candidates=[r.best_oa_location?.pdf_url,r.primary_location?.pdf_url].filter(Boolean);const pdf=candidates.find(isLikelyPdf)||"";const landing=r.primary_location?.landing_page_url||r.best_oa_location?.landing_page_url||r.doi||r.id;const source=r.primary_location?.source||{};return{id:"oa:"+r.id,doi:r.doi?r.doi.replace("https://doi.org/",""):"",title:r.title,authors:a,year:r.publication_year||"",date:(r.publication_date||"").slice(0,10),venue:source.display_name||"",issns:[source.issn_l,...(source.issn||[])].filter(Boolean),abstract:invertedToText(r.abstract_inverted_index),url:landing,pdf:pdf,oa:!!pdf||!!r.open_access?.is_oa,cites:r.cited_by_count||0};});} },
   eupmc:{ label:"Europe PMC", on:true, run:async(q,n,yr)=>{ const terms=q.split(/\s+/).filter(Boolean).slice(0,4).map(w=>w.replace(/["()]/g,"")); let qs=terms.map(w=>"TITLE_ABS:\""+w+"\"").join(" AND "); if(yr)qs+=" AND PUB_YEAR:["+yr+" TO 3000]"; const u="https://www.ebi.ac.uk/europepmc/webservices/rest/search?query="+encodeURIComponent(qs)+"&format=json&pageSize="+n+"&resultType=core";
-    const d=await fetchJ(u); return ((d.resultList&&d.resultList.result)||[]).filter(r=>r.title).map(r=>{let pdf="";(r.fullTextUrlList&&r.fullTextUrlList.fullTextUrl||[]).forEach(f=>{if(f.documentStyle==="pdf"||/pdf/i.test(f.availability||"")){pdf=f.url||pdf;}});if(!pdf&&r.pmcid)pdf="https://www.ncbi.nlm.nih.gov/pmc/articles/"+r.pmcid+"/pdf/";const journal=r.journalInfo?.journal||{};return{id:"pmc:"+(r.pmcid||r.id),doi:r.doi||"",title:r.title,authors:r.authorString||"",year:r.pubYear||"",date:(r.firstPublicationDate||"").slice(0,10),venue:journal.title||r.journalTitle||"",issns:[journal.issn,journal.essn].filter(Boolean),abstract:r.abstractText||"",url:"https://europepmc.org/article/"+r.source+"/"+r.id,pdf:pdf,oa:!!pdf||r.isOpenAccess==="Y",cites:0};});} },
+    const d=await fetchJ(u); return ((d.resultList&&d.resultList.result)||[]).filter(r=>r.title).map(r=>{let pdf="";(r.fullTextUrlList&&r.fullTextUrlList.fullTextUrl||[]).forEach(f=>{if(f.documentStyle==="pdf"||/pdf/i.test(f.availability||"")){pdf=f.url||pdf;}});if(!pdf&&r.pmcid)pdf="https://www.ncbi.nlm.nih.gov/pmc/articles/"+r.pmcid+"/pdf/";const journal=r.journalInfo?.journal||{};return{id:"pmc:"+(r.pmcid||r.id),doi:r.doi||"",title:r.title,authors:r.authorString||"",year:r.pubYear||"",date:(r.firstPublicationDate||"").slice(0,10),venue:journal.title||r.journalTitle||"",issns:[journal.issn,journal.essn].filter(Boolean),abstract:jats2text(r.abstractText||""),url:"https://europepmc.org/article/"+r.source+"/"+r.id,pdf:pdf,oa:!!pdf||r.isOpenAccess==="Y",cites:0};});} },
 };
 const strip=s=>s.replace(/<[^>]*>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim(),
   jats2text=x=>x?x.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim():"";
 const isLikelyPdf=u=>/(\.pdf(?:[?#]|$)|\/pdf(?:[/?#]|$)|format=pdf)/i.test(String(u||""));
+function invertedToText(index){
+  if(!index||typeof index!=="object")return"";
+  const words=[];
+  for(const [word,positions] of Object.entries(index))for(const pos of (positions||[]))if(Number.isInteger(pos)&&pos>=0)words[pos]=word;
+  return words.filter(Boolean).join(" ");
+}
 
 function crossrefAccess(message){
   const licenses=message&&message.license||[];
   const openLicense=licenses.some(x=>/creativecommons\.org\/licenses\//i.test(x.URL||x.url||""));
   const pdfLink=(message&&message.link||[]).find(l=>{const u=l.URL||l.url||"";return /application\/pdf/i.test(l["content-type"]||l.content_type||"")||isLikelyPdf(u);});
-  return{oa:openLicense,pdf:openLicense?(pdfLink?.URL||pdfLink?.url||""):"",url:message?.resource?.primary?.URL||message?.URL||""};
+  return{oa:openLicense,pdf:openLicense?(pdfLink?.URL||pdfLink?.url||""):"",url:message?.resource?.primary?.URL||message?.URL||"",abstract:jats2text(message?.abstract||"")};
 }
 async function verifyUnknownAccess(rs){
-  const pending=rs.filter(p=>p.doi&&!p.oa&&!p.pdf), queue=pending.slice();
-  const apply=(p,a)=>{if(!a)return;if(a.oa)p.oa=true;if(a.pdf)p.pdf=a.pdf;if(a.url&&!p.url)p.url=a.url;p.accessChecked=true;};
+  const wantAbstract=$("#showAbstract").checked;
+  const pending=rs.filter(p=>p.doi&&((!p.oa&&!p.pdf)||(wantAbstract&&!p.abstract))), queue=pending.slice();
+  const apply=(p,a)=>{if(!a)return;if(a.oa)p.oa=true;if(a.pdf)p.pdf=a.pdf;if(a.url&&!p.url)p.url=a.url;if(a.abstract&&!p.abstract)p.abstract=a.abstract;p.accessChecked=true;};
   const workers=Array.from({length:Math.min(6,queue.length)},async()=>{
     while(queue.length){
       const p=queue.shift(), key=norm(p);
@@ -281,8 +288,8 @@ async function run(){
   state.allResults=[...map.values()];
   if(state.yr){ state.allResults=state.allResults.filter(p=>parseInt(p.year)>=state.yr); }
   state.allResults.sort((a,b)=>(a._rank??0)-(b._rank??0));
-  if(state.allResults.some(p=>p.doi&&!p.oa&&!p.pdf)){
-    $("#main").innerHTML='<div class="state">正在按 DOI 核验开放许可和 PDF…</div>';
+  if(state.allResults.some(p=>p.doi&&((!p.oa&&!p.pdf)||($("#showAbstract").checked&&!p.abstract)))){
+    $("#main").innerHTML='<div class="state">正在按 DOI 补充开放许可、PDF 和摘要…</div>';
     await verifyUnknownAccess(state.allResults);
   }
   if(state.allResults.length){
@@ -394,7 +401,8 @@ function flash(m){ const st=document.createElement("div"); st.style.cssText="pos
   $("#go").addEventListener("click",run);
   $("#clear").addEventListener("click",()=>{$("#q").value="";$("#yr").value="";$("#oaOnly").checked=false;$("#showAbstract").checked=false;$("#ifMin").value="";$("#citeMin").value="";$("#venueKw").value="";$("#sort").value="relevance";$("#mirrorCustom").value="";state.allResults=[];state.results=[];state.query="";state.jcrMatched=0;showState('<div class="big">🔍</div>输入关键词开始检索。<br>支持多源并行：Crossref / OpenAlex / Europe PMC');$("#status").innerHTML="";});
   ["yr","oaOnly","ifMin","citeMin","venueKw","nsel"].forEach(id=>$("#"+id).addEventListener("change",()=>{if(state.query&&!state.running)run();}));
-  ["showAbstract","sort","mirror","mirrorCustom"].forEach(id=>$("#"+id).addEventListener(id==="mirrorCustom"?"input":"change",()=>{if(state.allResults.length){applyFilters();render();}}));
+  $("#showAbstract").addEventListener("change",async()=>{if(state.allResults.length){if($("#showAbstract").checked&&state.allResults.some(p=>p.doi&&!p.abstract)){flash("正在补充摘要…");await verifyUnknownAccess(state.allResults);}if($("#showAbstract").checked&&!state.allResults.some(p=>p.abstract))flash("当前检索结果的数据源未提供摘要");applyFilters();render();}});
+  ["sort","mirror","mirrorCustom"].forEach(id=>$("#"+id).addEventListener(id==="mirrorCustom"?"input":"change",()=>{if(state.allResults.length){applyFilters();render();}}));
   $("#q").addEventListener("keydown",e=>{ if(e.key==="Enter")run(); });
   renderStatus();
 })();
