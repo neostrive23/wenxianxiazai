@@ -166,7 +166,7 @@ const SRC = {
 };
 const strip=s=>s.replace(/<[^>]*>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim(),
   jats2text=x=>x?x.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim():"";
-const isLikelyPdf=u=>/(\.pdf(?:[?#]|$)|\/pdf(?:[/?#]|$)|format=pdf)/i.test(String(u||""));
+const isLikelyPdf=u=>/(\.pdf(?:[?#]|$)|\/pdf(?:direct)?(?:[/?#]|$)|format=pdf)/i.test(String(u||""));
 function invertedToText(index){
   if(!index||typeof index!=="object")return"";
   const words=[];
@@ -180,6 +180,10 @@ function crossrefAccess(message){
   const pdfLink=(message&&message.link||[]).find(l=>{const u=l.URL||l.url||"";return /application\/pdf/i.test(l["content-type"]||l.content_type||"")||isLikelyPdf(u);});
   return{oa:openLicense,pdf:openLicense?(pdfLink?.URL||pdfLink?.url||""):"",url:message?.resource?.primary?.URL||message?.URL||"",abstract:jats2text(message?.abstract||"")};
 }
+function openalexAccess(work){
+  const pdf=work?.best_oa_location?.pdf_url||work?.primary_location?.pdf_url||"";
+  return{oa:!!pdf||!!work?.open_access?.is_oa,pdf:pdf,url:work?.primary_location?.landing_page_url||work?.best_oa_location?.landing_page_url||work?.doi||""};
+}
 async function verifyUnknownAccess(rs){
   const wantAbstract=$("#showAbstract").checked;
   const pending=rs.filter(p=>p.doi&&((!p.oa&&!p.pdf)||(wantAbstract&&!p.abstract))), queue=pending.slice();
@@ -188,7 +192,7 @@ async function verifyUnknownAccess(rs){
     while(queue.length){
       const p=queue.shift(), key=norm(p);
       if(state.accessCache.has(key)){apply(p,state.accessCache.get(key));continue;}
-      try{const d=await fetchJ("https://api.crossref.org/works/"+encodeURIComponent(p.doi));const a=crossrefAccess(d.message);state.accessCache.set(key,a);apply(p,a);}
+      try{const d=await fetchJ("https://api.crossref.org/works/"+encodeURIComponent(p.doi));let a=crossrefAccess(d.message);if(!a.oa&&!a.pdf){try{const o=await fetchJ("https://api.openalex.org/works/https://doi.org/"+encodeURIComponent(p.doi)+"?select=doi,primary_location,open_access,best_oa_location");a={...a,...openalexAccess(o),url:a.url||openalexAccess(o).url};}catch(e){console.warn("OpenAlex OA check",p.doi,e);}}state.accessCache.set(key,a);apply(p,a);}
       catch(e){console.warn("OA check",p.doi,e);p.accessChecked=false;}
     }
   });
